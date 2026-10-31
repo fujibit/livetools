@@ -221,7 +221,7 @@
     .value-title { margin-bottom: 6px; color: var(--muted); font-size: 11px; }
     .value-text { font-size: 14px; font-weight: 650; }
 
-    .copy-button {
+    .copy-button, .solve-button {
       margin-top: 15px;
       padding: 10px 14px;
       border: 0;
@@ -231,7 +231,48 @@
       font-weight: 650;
       cursor: pointer;
     }
-    .copy-button:hover { background: #5144d2; }
+
+    .copy-button:hover, .solve-button:hover { background: #5144d2; }
+
+    .equation-input {
+      text-transform: none !important;
+      font-size: 17px;
+    }
+
+    .equation-examples {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 15px;
+    }
+
+    .example-button {
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: #586075;
+      background: #fcfcfe;
+      cursor: pointer;
+    }
+
+    .example-button:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .equation-result {
+      margin-top: 20px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fcfcfe;
+      line-height: 1.6;
+    }
+
+    .equation-result:empty { display: none; }
+    .equation-result.error { color: #b42318; border-color: #f2c7c4; background: #fffafa; }
+    .result-title { margin: 0 0 5px; font-weight: 700; }
+    .result-detail { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
 
     .tool-view[hidden] { display: none; }
 
@@ -266,6 +307,9 @@
         </button>
         <button class="nav-button" data-tool="color-introducer">
           <span class="nav-icon">◉</span> Color Introducer
+        </button>
+        <button class="nav-button" data-tool="equation-solver">
+          <span class="nav-icon">x²</span> Equation Solver
         </button>
       </nav>
     </aside>
@@ -315,6 +359,37 @@
             </div>
             <div class="color-preview" id="color-preview">Color preview</div>
           </div>
+        </div>
+      </section>
+
+      <section class="tool-view" id="equation-solver" hidden>
+        <header class="page-heading">
+          <p class="eyebrow">Math tool</p>
+          <h1>Equation Solver</h1>
+          <p class="description">Solve linear and quadratic equations in one variable.</p>
+        </header>
+
+        <div class="tool-panel">
+          <form id="equation-form">
+            <label class="field-label" for="equation-input">Enter an equation</label>
+            <input
+              class="equation-input"
+              id="equation-input"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="For example: 2x + 3 = 7"
+              aria-describedby="equation-hint"
+            >
+            <p class="hint" id="equation-hint">Use x, numbers, parentheses, and + − × ÷. Powers up to x² are supported.</p>
+            <button class="solve-button" type="submit">Solve equation</button>
+          </form>
+          <div class="equation-examples" aria-label="Equation examples">
+            <button class="example-button" type="button" data-equation="2x + 3 = 7">2x + 3 = 7</button>
+            <button class="example-button" type="button" data-equation="x^2 - 5x + 6 = 0">x² − 5x + 6 = 0</button>
+            <button class="example-button" type="button" data-equation="3(x - 2) = 12">3(x − 2) = 12</button>
+          </div>
+          <div class="equation-result" id="equation-result" aria-live="polite" role="status"></div>
         </div>
       </section>
     </main>
@@ -423,6 +498,235 @@
     });
 
     updateColor(picker.value);
+
+    const equationInput = document.getElementById("equation-input");
+    const equationResult = document.getElementById("equation-result");
+
+    function tokenize(expression) {
+      const tokens = [];
+      let position = 0;
+      const tokenPattern = /\s*(?:(\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|([xX])|([+\-*/^()])/y;
+
+      while (position < expression.length) {
+        tokenPattern.lastIndex = position;
+        const match = tokenPattern.exec(expression);
+        if (!match) throw new Error("Use only numbers, x, parentheses, and +, −, ×, ÷, or ^.");
+
+        const raw = match[0].trim();
+        const type = match[1] !== undefined ? "number" : match[2] ? "x" : raw;
+        const value = type === "number" ? Number(raw) : raw.toLowerCase();
+        if (type === "number" && !Number.isFinite(value)) throw new Error("Please enter a finite number.");
+        tokens.push({ type, value });
+        position = tokenPattern.lastIndex;
+      }
+
+      if (!tokens.length) throw new Error("Enter an equation to solve.");
+
+      const expanded = [];
+      for (const token of tokens) {
+        const previous = expanded[expanded.length - 1];
+        const previousEndsValue = previous && (
+          previous.type === "number" || previous.type === "x" || previous.type === ")"
+        );
+        const nextStartsValue = token.type === "x" || token.type === "(";
+
+        if (previousEndsValue && nextStartsValue) {
+          expanded.push({ type: "*", value: "*" });
+        }
+        expanded.push(token);
+      }
+      return expanded;
+    }
+
+    function addPolynomials(a, b, sign = 1) {
+      return [a[0] + sign * b[0], a[1] + sign * b[1], a[2] + sign * b[2]];
+    }
+
+    function multiplyPolynomials(a, b) {
+      const result = [0, 0, 0, 0, 0];
+      for (let i = 0; i <= 2; i++) {
+        for (let j = 0; j <= 2; j++) result[i + j] += a[i] * b[j];
+      }
+      if (Math.abs(result[3]) > 1e-10 || Math.abs(result[4]) > 1e-10) {
+        throw new Error("Only linear and quadratic equations are supported.");
+      }
+      return result.slice(0, 3);
+    }
+
+    function parseExpression(source) {
+      const tokens = tokenize(source);
+      let index = 0;
+
+      function peek() { return tokens[index]; }
+      function take(type) {
+        if (!peek() || peek().type !== type) throw new Error("Check the equation syntax and parentheses.");
+        return tokens[index++];
+      }
+
+      function parsePrimary() {
+        if (!peek()) throw new Error("The equation appears to be incomplete.");
+        if (peek().type === "number") return [take("number").value, 0, 0];
+        if (peek().type === "x") {
+          take("x");
+          return [0, 1, 0];
+        }
+        if (peek().type === "(") {
+          take("(");
+          const value = parseSum();
+          take(")");
+          return value;
+        }
+        throw new Error("Check the equation syntax and parentheses.");
+      }
+
+      function parsePower() {
+        const base = parsePrimary();
+        if (peek() && peek().type === "^") {
+          take("^");
+          let sign = 1;
+          if (peek() && (peek().type === "+" || peek().type === "-")) {
+            if (take(peek().type).type === "-") sign = -1;
+          }
+          if (!peek() || peek().type !== "number") {
+            throw new Error("Use a whole-number exponent of 0, 1, or 2.");
+          }
+          const exponent = sign * take("number").value;
+          if (!Number.isInteger(exponent) || exponent < 0 || exponent > 2) {
+            throw new Error("Only exponents 0, 1, and 2 are supported.");
+          }
+
+          let result = [1, 0, 0];
+          for (let i = 0; i < exponent; i++) result = multiplyPolynomials(result, base);
+          return result;
+        }
+        return base;
+      }
+
+      function parseUnary() {
+        if (peek() && (peek().type === "+" || peek().type === "-")) {
+          const sign = take(peek().type).type === "-" ? -1 : 1;
+          const value = parseUnary();
+          return value.map(coefficient => coefficient * sign);
+        }
+        return parsePower();
+      }
+
+      function parseProduct() {
+        let value = parseUnary();
+        while (peek() && (peek().type === "*" || peek().type === "/")) {
+          const operator = take(peek().type).type;
+          const right = parseUnary();
+          if (operator === "*") {
+            value = multiplyPolynomials(value, right);
+          } else {
+            if (Math.abs(right[1]) > 1e-10 || Math.abs(right[2]) > 1e-10) {
+              throw new Error("Division by an expression containing x is not supported.");
+            }
+            if (Math.abs(right[0]) < 1e-10) throw new Error("Division by zero is not defined.");
+            value = value.map(coefficient => coefficient / right[0]);
+          }
+        }
+        return value;
+      }
+
+      function parseSum() {
+        let value = parseProduct();
+        while (peek() && (peek().type === "+" || peek().type === "-")) {
+          const operator = take(peek().type).type;
+          value = addPolynomials(value, parseProduct(), operator === "+" ? 1 : -1);
+        }
+        return value;
+      }
+
+      const result = parseSum();
+      if (index !== tokens.length) throw new Error("Check the equation syntax and parentheses.");
+      return result;
+    }
+
+    function formatNumber(value) {
+      if (Math.abs(value) < 1e-10) value = 0;
+      return Number(value.toPrecision(10)).toString();
+    }
+
+    function solveEquation(equation) {
+      const parts = equation.split("=");
+      if (parts.length !== 2 || !parts[0].trim() || !parts[1].trim()) {
+        throw new Error("Enter one equation with an equals sign, such as 2x + 3 = 7.");
+      }
+
+      const left = parseExpression(parts[0]);
+      const right = parseExpression(parts[1]);
+      const coefficients = addPolynomials(left, right, -1).map(value =>
+        Math.abs(value) < 1e-10 ? 0 : value
+      );
+      const [constant, linear, quadratic] = coefficients;
+
+      if (quadratic === 0 && linear === 0) {
+        return constant === 0
+          ? { title: "Every real number is a solution.", detail: "Both sides of the equation are equivalent." }
+          : { title: "There is no solution.", detail: "The equation is inconsistent." };
+      }
+
+      if (quadratic === 0) {
+        const solution = -constant / linear;
+        return {
+          title: `x = ${formatNumber(solution)}`,
+          detail: "One real solution."
+        };
+      }
+
+      const discriminant = linear * linear - 4 * quadratic * constant;
+      const tolerance = 1e-10 * Math.max(1, linear * linear, Math.abs(4 * quadratic * constant));
+
+      if (discriminant < -tolerance) {
+        return { title: "No real solutions.", detail: "The discriminant is negative." };
+      }
+
+      if (Math.abs(discriminant) <= tolerance) {
+        return {
+          title: `x = ${formatNumber(-linear / (2 * quadratic))}`,
+          detail: "One repeated real solution."
+        };
+      }
+
+      const root = Math.sqrt(discriminant);
+      const solutions = [
+        (-linear - root) / (2 * quadratic),
+        (-linear + root) / (2 * quadratic)
+      ].sort((a, b) => a - b);
+
+      return {
+        title: `x = ${formatNumber(solutions[0])} or x = ${formatNumber(solutions[1])}`,
+        detail: "Two real solutions."
+      };
+    }
+
+    document.getElementById("equation-form").addEventListener("submit", event => {
+      event.preventDefault();
+      equationResult.classList.remove("error");
+
+      try {
+        const result = solveEquation(equationInput.value);
+        equationResult.innerHTML = "";
+        const title = document.createElement("p");
+        title.className = "result-title";
+        title.textContent = result.title;
+        const detail = document.createElement("p");
+        detail.className = "result-detail";
+        detail.textContent = result.detail;
+        equationResult.append(title, detail);
+      } catch (error) {
+        equationResult.classList.add("error");
+        equationResult.textContent = error.message;
+      }
+    });
+
+    document.querySelectorAll(".example-button").forEach(button => {
+      button.addEventListener("click", () => {
+        equationInput.value = button.dataset.equation;
+        document.getElementById("equation-form").requestSubmit();
+      });
+    });
   </script>
 </body>
 </html>
