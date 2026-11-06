@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="A private, browser-based word counter, color converter, and equation solver.">
+  <meta name="description" content="Private, browser-based tools for writing, color conversion, equation solving, and favicon generation.">
   <title>Toolbox</title>
   <style>
     :root {
@@ -28,7 +28,7 @@
       background: var(--background);
     }
 
-    button, input, textarea { font: inherit; }
+    button, input, textarea, select { font: inherit; }
     button { touch-action: manipulation; }
 
     :focus-visible {
@@ -169,7 +169,7 @@
       line-height: 1.65;
     }
 
-    textarea:focus, input[type="text"]:focus {
+    textarea:focus, input[type="text"]:focus, select:focus {
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgb(101 88 232 / 12%);
     }
@@ -264,7 +264,7 @@
     .value-title { margin-bottom: 6px; color: var(--muted); font-size: 11px; }
     .value-text { font-size: 14px; font-weight: 650; overflow-wrap: anywhere; }
 
-    .copy-button, .solve-button {
+    .copy-button, .solve-button, .download-button {
       margin-top: 15px;
       min-height: 44px;
       padding: 10px 14px;
@@ -276,7 +276,8 @@
       cursor: pointer;
     }
 
-    .copy-button:hover:not(:disabled), .solve-button:hover { background: #5144d2; }
+    .copy-button:hover:not(:disabled), .solve-button:hover:not(:disabled),
+    .download-button:hover:not(:disabled) { background: #5144d2; }
     button:disabled { opacity: .6; cursor: not-allowed; }
     .copy-status { min-height: 1.6em; margin-bottom: 0; }
     .equation-input { font-size: 17px; }
@@ -314,6 +315,69 @@
     .equation-result.error { color: var(--error); border-color: #f2c7c4; background: #fffafa; }
     .result-title { margin: 0 0 5px; font-weight: 700; }
     .result-detail { margin: 0; color: var(--muted); }
+
+    .favicon-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 210px;
+      gap: 28px;
+      align-items: start;
+    }
+
+    .favicon-controls { min-width: 0; }
+    .favicon-field { margin-bottom: 18px; }
+
+    .favicon-options {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .favicon-color-control {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .favicon-color-control input[type="color"] {
+      flex-basis: 48px;
+      width: 48px;
+      height: 44px;
+    }
+
+    select {
+      width: 100%;
+      min-height: 44px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--ink);
+      background: #fcfcfe;
+    }
+
+    .favicon-preview-wrap {
+      display: grid;
+      justify-items: center;
+      gap: 12px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fcfcfe;
+    }
+
+    .favicon-preview {
+      width: 128px;
+      height: 128px;
+      display: block;
+      image-rendering: auto;
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgb(25 32 56 / 12%);
+    }
+
+    .favicon-preview-label { margin: 0; color: var(--muted); font-size: 12px; text-align: center; }
+    .favicon-downloads { display: flex; flex-wrap: wrap; gap: 8px; }
+    .favicon-downloads .download-button { margin-top: 0; }
+    .favicon-status { min-height: 1.6em; margin: 12px 0 0; color: var(--muted); font-size: 12px; }
+
     .noscript { margin: 20px; padding: 16px; background: #fff4dc; }
 
     @media (max-width: 700px) {
@@ -326,6 +390,8 @@
       main { padding: 28px 18px; }
       .color-layout { grid-template-columns: 1fr; }
       .color-preview { min-height: 180px; }
+      .favicon-layout { grid-template-columns: 1fr; }
+      .favicon-preview-wrap { justify-self: start; }
     }
 
     @media (max-width: 420px) {
@@ -333,6 +399,8 @@
       .stat { padding: 12px 9px; }
       .stat-value { font-size: 21px; }
       .nav-button { gap: 7px; padding: 11px 8px; font-size: 13px; }
+      .favicon-options { grid-template-columns: 1fr; gap: 0; }
+      .favicon-downloads { flex-direction: column; align-items: stretch; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -362,6 +430,10 @@
         <button type="button" class="nav-button" data-tool="equation-solver"
           aria-controls="equation-solver">
           <span class="nav-icon" aria-hidden="true">x²</span> Equation Solver
+        </button>
+        <button type="button" class="nav-button" data-tool="favicon-generator"
+          aria-controls="favicon-generator">
+          <span class="nav-icon" aria-hidden="true">▣</span> Favicon Generator
         </button>
       </nav>
     </aside>
@@ -452,6 +524,66 @@
             <button class="example-button" type="button" data-equation="3(x - 2) = 12">3(x − 2) = 12</button>
           </div>
           <div class="equation-result" id="equation-result" role="status" aria-atomic="true"></div>
+        </div>
+      </section>
+
+      <section class="tool-view" id="favicon-generator" aria-labelledby="favicon-heading" hidden>
+        <header class="page-heading">
+          <p class="eyebrow">Design tool</p>
+          <h1 id="favicon-heading" tabindex="-1">Favicon Generator</h1>
+          <p class="description">Create a simple text favicon and download it as SVG or PNG. Your design stays in this page.</p>
+        </header>
+
+        <div class="tool-panel">
+          <div class="favicon-layout">
+            <div class="favicon-controls">
+              <div class="favicon-field">
+                <label class="field-label" for="favicon-text">Icon text</label>
+                <input id="favicon-text" type="text" value="A" maxlength="8"
+                  autocomplete="off" aria-describedby="favicon-text-hint">
+                <p class="hint" id="favicon-text-hint">Use a letter, initials, or an emoji. Short text is easiest to read at small sizes.</p>
+              </div>
+
+              <div class="favicon-options">
+                <div class="favicon-field">
+                  <label class="field-label" for="favicon-background">Background color</label>
+                  <div class="favicon-color-control">
+                    <input id="favicon-background" type="color" value="#6558e8" aria-label="Favicon background color">
+                    <span id="favicon-background-value">#6558E8</span>
+                  </div>
+                </div>
+                <div class="favicon-field">
+                  <label class="field-label" for="favicon-foreground">Text color</label>
+                  <div class="favicon-color-control">
+                    <input id="favicon-foreground" type="color" value="#ffffff" aria-label="Favicon text color">
+                    <span id="favicon-foreground-value">#FFFFFF</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="favicon-field">
+                <label class="field-label" for="favicon-shape">Icon shape</label>
+                <select id="favicon-shape">
+                  <option value="rounded">Rounded square</option>
+                  <option value="square">Square</option>
+                  <option value="circle">Circle</option>
+                </select>
+              </div>
+
+              <div class="favicon-downloads" aria-label="Download favicon">
+                <button class="download-button" id="download-svg" type="button">Download SVG</button>
+                <button class="download-button" type="button" data-png-size="16">PNG 16×16</button>
+                <button class="download-button" type="button" data-png-size="32">PNG 32×32</button>
+                <button class="download-button" type="button" data-png-size="48">PNG 48×48</button>
+              </div>
+              <p class="favicon-status" id="favicon-status" role="status" aria-atomic="true"></p>
+            </div>
+
+            <div class="favicon-preview-wrap">
+              <img class="favicon-preview" id="favicon-preview" alt="Live preview of your favicon">
+              <p class="favicon-preview-label">Live preview</p>
+            </div>
+          </div>
         </div>
       </section>
     </main>
@@ -991,12 +1123,121 @@
         });
       });
 
+      // Favicon generator: build safe SVG markup and rasterize it locally for PNG downloads.
+      const faviconText = byId("favicon-text");
+      const faviconBackground = byId("favicon-background");
+      const faviconForeground = byId("favicon-foreground");
+      const faviconShape = byId("favicon-shape");
+      const faviconPreview = byId("favicon-preview");
+      const faviconStatus = byId("favicon-status");
+
+      function escapeXml(value) {
+        return value.replace(/[<>&"']/g, character => ({
+          "<": "&lt;",
+          ">": "&gt;",
+          "&": "&amp;",
+          '"': "&quot;",
+          "'": "&apos;"
+        })[character]);
+      }
+
+      function getFaviconSvg(size = 128) {
+        const text = faviconText.value.trim() || "A";
+        const escapedText = escapeXml(text);
+        const background = faviconBackground.value;
+        const foreground = faviconForeground.value;
+        const shape = faviconShape.value;
+        const fontSize = text.length > 3 ? 44 : text.length > 1 ? 60 : 76;
+        let shapeElement;
+
+        if (shape === "circle") {
+          shapeElement = `<circle cx="64" cy="64" r="64" fill="${background}"/>`;
+        } else if (shape === "square") {
+          shapeElement = `<rect width="128" height="128" fill="${background}"/>`;
+        } else {
+          shapeElement = `<rect width="128" height="128" rx="28" fill="${background}"/>`;
+        }
+
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 128 128">${shapeElement}<text x="64" y="64" fill="${foreground}" font-family="Arial, Helvetica, sans-serif" font-size="${fontSize}" font-weight="700" text-anchor="middle" dominant-baseline="central">${escapedText}</text></svg>`;
+      }
+
+      function updateFaviconPreview() {
+        const svg = getFaviconSvg();
+        faviconPreview.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+        byId("favicon-background-value").textContent = faviconBackground.value.toUpperCase();
+        byId("favicon-foreground-value").textContent = faviconForeground.value.toUpperCase();
+        faviconStatus.textContent = "";
+      }
+
+      [faviconText, faviconBackground, faviconForeground, faviconShape].forEach(control => {
+        control.addEventListener("input", updateFaviconPreview);
+        control.addEventListener("change", updateFaviconPreview);
+      });
+
+      function downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+
+      byId("download-svg").addEventListener("click", () => {
+        const blob = new Blob([getFaviconSvg(128)], { type: "image/svg+xml;charset=utf-8" });
+        downloadBlob(blob, "favicon.svg");
+        faviconStatus.textContent = "SVG favicon downloaded.";
+      });
+
+      document.querySelectorAll("[data-png-size]").forEach(button => {
+        button.addEventListener("click", () => {
+          const size = Number(button.dataset.pngSize);
+          const svgBlob = new Blob([getFaviconSvg(size)], { type: "image/svg+xml;charset=utf-8" });
+          const imageUrl = URL.createObjectURL(svgBlob);
+          const image = new Image();
+
+          image.onload = () => {
+            try {
+              const canvas = document.createElement("canvas");
+              canvas.width = size;
+              canvas.height = size;
+              const context = canvas.getContext("2d");
+              if (!context) throw new Error("Canvas is not available.");
+              context.drawImage(image, 0, 0, size, size);
+              canvas.toBlob(blob => {
+                URL.revokeObjectURL(imageUrl);
+                if (!blob) {
+                  faviconStatus.textContent = "Could not create the PNG. Please try again.";
+                  return;
+                }
+                downloadBlob(blob, `favicon-${size}x${size}.png`);
+                faviconStatus.textContent = `${size}×${size} PNG favicon downloaded.`;
+              }, "image/png");
+            } catch {
+              URL.revokeObjectURL(imageUrl);
+              faviconStatus.textContent = "Could not create the PNG. Please try again.";
+            }
+          };
+
+          image.onerror = () => {
+            URL.revokeObjectURL(imageUrl);
+            faviconStatus.textContent = "Could not load the icon preview. Please try again.";
+          };
+
+          image.src = imageUrl;
+        });
+      });
+
       // Initialize from actual values, including browser-restored form contents.
       updateTextCounts();
       updateColor(hexInput.value, true);
+      updateFaviconPreview();
       window.addEventListener("pageshow", () => {
         updateTextCounts();
         updateColor(hexInput.value);
+        updateFaviconPreview();
       });
     })();
   </script>
